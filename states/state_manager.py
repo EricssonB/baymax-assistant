@@ -20,9 +20,26 @@ class StateManager:
 
         # Start in sleep state
         self.current_state: State = self.sleep_state
+        self.last_user_text = None
+
+        enter_hook = getattr(self.current_state, "on_enter", None)
+        if enter_hook:
+            enter_hook()
 
     def set_state(self, new_state: State) -> None:
+        if not new_state or new_state is self.current_state:
+            return
+
+        if self.current_state:
+            exit_hook = getattr(self.current_state, "on_exit", None)
+            if exit_hook:
+                exit_hook()
+
         self.current_state = new_state
+
+        enter_hook = getattr(self.current_state, "on_enter", None)
+        if enter_hook:
+            enter_hook()
 
     def update(self, user_input=None):
         """Runs one cycle of the current state logic."""

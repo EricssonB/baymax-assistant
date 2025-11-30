@@ -2,16 +2,8 @@
 # Baymax 2.0 – System Wiring (Architecture Skeleton)
 # -----------------------------
 
-# Import states
-from states.sleep_state import SleepState
-from states.wake_state import WakeState
-from states.listening_state import ListeningState
-from states.processing_state import ProcessingState
-from states.speaking_state import SpeakingState
-from states.idle_state import IdleState
+# Import StateManager and subsystems
 from states.state_manager import StateManager
-
-# Subsystems (not wired yet – architecture only)
 from audio.microphone import Microphone
 from stt.deepgram_stt import DeepgramSTT
 from llm.openai_llm import OpenAILLM
@@ -30,35 +22,24 @@ tts = ElevenLabsTTS()
 wakeword = WakeWordDetector()
 
 # -----------------------------
-# Instantiate States
-# -----------------------------
-sleep_state = SleepState()
-wake_state = WakeState()
-listening_state = ListeningState()
-processing_state = ProcessingState()
-speaking_state = SpeakingState()
-idle_state = IdleState()
-
-# Optional demo-only circular chain (not required, but helps visualize flow)
-sleep_state.next = wake_state
-wake_state.next = listening_state
-listening_state.next = processing_state
-processing_state.next = speaking_state
-speaking_state.next = idle_state
-idle_state.next = sleep_state
-
-# -----------------------------
 # Create State Manager
 # -----------------------------
 # IMPORTANT:
-# StateManager() takes NO arguments in this version.
-# It internally creates its own state registry and starts in SleepState.
+# StateManager internally creates all state objects and begins in SleepState.
 manager = StateManager()
 
 # -----------------------------
 # Demo Loop (Architecture Only)
 # -----------------------------
-demo_inputs = ["None", "hey baymax", "user speech", "response", "None"]
+# Added extra step so SpeakingState actually runs.
+demo_inputs = [
+    None,            # SleepState
+    "hey baymax",    # Wake word → WakeState
+    "user speech",   # WakeState → ListeningState
+    "response",      # ListeningState → ProcessingState
+    None,            # ProcessingState returns SpeakingState
+    "final step"     # SpeakingState now has a turn to execute!
+]
 
 for demo in demo_inputs:
     print("\n[Demo] Input:", demo)
