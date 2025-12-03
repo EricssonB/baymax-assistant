@@ -18,6 +18,13 @@ class Settings:
         # Optional: add future settings here
         self.SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", 16000))
         self.CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1024))
+        self.WAKE_ENERGY_THRESHOLD = int(os.getenv("WAKE_ENERGY_THRESHOLD", 220))
+        self.WAKE_REQUIRED_HITS = int(os.getenv("WAKE_REQUIRED_HITS", 2))
+        self.WAKE_DEBUG_INTERVAL = float(os.getenv("WAKE_DEBUG_INTERVAL", 0.0))
+        self.TTS_POST_BUFFER = float(os.getenv("TTS_POST_BUFFER", 0.05))
+        self.DEEPGRAM_ENDPOINT_MS = int(os.getenv("DEEPGRAM_ENDPOINT_MS", 200))
+        self.MIN_TRANSCRIPT_WORDS = int(os.getenv("MIN_TRANSCRIPT_WORDS", 2))
+        self.SLEEP_ENTRY_GUARD = float(os.getenv("SLEEP_ENTRY_GUARD", 0.6))
 
 # Create a single shared instance
 settings = Settings()

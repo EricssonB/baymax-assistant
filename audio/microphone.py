@@ -1,9 +1,15 @@
+import time
+import numpy as np
 import sounddevice as sd
 import wave
 from typing import Optional
 
-from config.settings import settings
+from config_app.settings import settings
 from interfaces.audio_interface import AudioInterface
+
+
+def _current_time() -> float:
+    return time.time()
 
 
 class Microphone(AudioInterface):
@@ -15,6 +21,7 @@ class Microphone(AudioInterface):
         self.channels = channels
         self._chunk_size = chunk_size or settings.CHUNK_SIZE
         self._stream = None
+        self._mute_until: float = 0.0
 
     def start_stream(self):
         """Start a streaming audio capture session."""
@@ -33,12 +40,20 @@ class Microphone(AudioInterface):
             self._stream = None
             print("[Audio] Failed to start microphone stream:", exc)
 
+    def mute_for(self, duration: float) -> None:
+        """Temporarily suppress capture for the given duration in seconds."""
+        self._mute_until = max(self._mute_until, _current_time() + max(duration, 0.0))
+
     def read_audio_chunk(self) -> bytes:
         """Read a chunk from the active stream (starts stream if needed)."""
         if not self._stream:
             self.start_stream()
 
         if not self._stream:
+            return b""
+
+        if _current_time() < self._mute_until:
+            time.sleep(0.05)
             return b""
 
         try:
@@ -62,17 +77,50 @@ class Microphone(AudioInterface):
             self._stream = None
 
     def record_to_file(self, filename: str, duration: int = 3):
-        """Record audio from the microphone and save as a WAV file."""
-        print(f"[Audio] Recording {duration}s to {filename}...")
+        """Record audio with early stop on silence detection."""
+        print(f"[Audio] Recording up to {duration}s -> {filename}")
+
+        wait_timeout = max(self._mute_until - _current_time(), 0.0)
+        if wait_timeout > 0:
+            time.sleep(wait_timeout)
+
+        chunk_duration = 0.1  # 100ms chunks
+        chunk_samples = int(chunk_duration * self.sample_rate)
+        max_chunks = int(duration / chunk_duration)
+        silence_threshold = 50  # Very low RMS threshold for quiet mics
+        silence_chunks_to_stop = 12  # Stop after 1.2s of silence (after speech detected)
+        min_speech_chunks = 5  # Require at least 0.5s of speech before allowing early stop
+        
+        all_audio = []
+        speech_chunks = 0
+        consecutive_silence = 0
 
         try:
-            audio = sd.rec(
-                int(duration * self.sample_rate),
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype="int16"
-            )
-            sd.wait()  # Block until recording finishes
+            for _ in range(max_chunks):
+                chunk = sd.rec(
+                    chunk_samples,
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype="int16"
+                )
+                sd.wait()
+                all_audio.append(chunk)
+                
+                # Calculate RMS volume
+                rms = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
+                print(f"[Audio] RMS: {rms:.0f}")
+                
+                if rms > silence_threshold:
+                    speech_chunks += 1
+                    consecutive_silence = 0
+                elif speech_chunks >= min_speech_chunks:
+                    consecutive_silence += 1
+                    if consecutive_silence >= silence_chunks_to_stop:
+                        print("[Audio] Silence detected, stopping early")
+                        break
+
+            # Combine all chunks
+            audio = np.concatenate(all_audio)
 
             # Save WAV
             with wave.open(filename, "wb") as wf:
@@ -81,7 +129,8 @@ class Microphone(AudioInterface):
                 wf.setframerate(self.sample_rate)
                 wf.writeframes(audio.tobytes())
 
-            print(f"[Audio] Saved recording to {filename}")
+            actual_duration = len(audio) / self.sample_rate
+            print(f"[Audio] Saved recording ({actual_duration:.1f}s) -> {filename}")
 
         except Exception as e:
             print("[Audio] Microphone error:", e)

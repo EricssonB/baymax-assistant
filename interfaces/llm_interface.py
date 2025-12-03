@@ -5,6 +5,10 @@ class LLMInterface(ABC):
     """Interface for LLM-based response generation."""
 
     @abstractmethod
+    def generate(self, text: str) -> str:
+        """Generate a reply from raw user text."""
+        pass
+
     def generate_reply(self, messages: List[Dict[str, Any]]) -> str:
         """
         Generate a response given a list of chat messages.

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 class State(ABC):
-    """Base interface class for all Baymax states."""
+    """Base interface class for all Baymax app_states."""
 
     @abstractmethod
     def on_enter(self) -> None:
