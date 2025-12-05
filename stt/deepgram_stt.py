@@ -16,8 +16,15 @@ class DeepgramSTT(STTInterface):
         self._client = None
         self._options_cls = None
 
+    def _ensure_client(self):
+        if self._client and self._options_cls:
+            return
+
         try:
             from deepgram import DeepgramClient, PrerecordedOptions
+
+            if not settings.DEEPGRAM_API_KEY:
+                raise ValueError("DEEPGRAM_API_KEY is missing")
 
             self._client = DeepgramClient(api_key=settings.DEEPGRAM_API_KEY)
             self._options_cls = PrerecordedOptions
@@ -26,6 +33,7 @@ class DeepgramSTT(STTInterface):
 
     def transcribe_audio(self, audio_bytes: bytes) -> str:
         """Convert in-memory WAV bytes to text."""
+        self._ensure_client()
         if not self._client or not self._options_cls:
             print("[STT] No client available.")
             return ""
@@ -41,7 +49,7 @@ class DeepgramSTT(STTInterface):
 
             source = {"buffer": audio_bytes, "mimetype": "audio/wav"}
 
-            response = self._client.listen.prerecorded.v("1").transcribe_file(  # type: ignore[attr-defined]
+            response = self._client.listen.prerecorded.v("1").transcribe_file(  # type: ignore
                 source,
                 options,
             )

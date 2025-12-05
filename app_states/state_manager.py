@@ -34,7 +34,7 @@ class StateManager:
         self.stt = stt
         self.tts = tts
         self.wake = wake
-        self.llm = llm   # <-- Required fix
+        self.llm = llm
         self.streaming_stt = stt_stream
 
         # Shared conversation variables

@@ -1,30 +1,27 @@
 import os
 import time
 import wave
-from typing import Iterable, Iterator, Optional, Tuple, Union
+from typing import Iterator, Optional
 
 from config_app.settings import settings
 from interfaces.tts_interface import TTSInterface
-from elevenlabs import ElevenLabs
+import requests
 
 
 class ElevenLabsTTS(TTSInterface):
     """ElevenLabs TTS using Baymax voice settings."""
 
     def __init__(self):
-        if not settings.ELEVENLABS_API_KEY:
+        api_key = settings.ELEVENLABS_API_KEY
+        if not api_key:
             raise ValueError("ELEVENLABS_API_KEY is missing in .env")
 
-        try:
-            self.client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
-        except Exception as e:
-            print("[TTS] SDK import error:", e)
-            self.client = None
+        self._session = requests.Session()
+        self._api_key = api_key
 
         # ⭐ Your Baymax voice
-        self.voice_id = "J74irub9nJ8NIWEDskLz"
+        self.voice_id = settings.ELEVENLABS_VOICE_ID
         self.model_id = "eleven_multilingual_v2"
-        self.output_format = "pcm_16000"
         self.optimize_streaming_latency = 3  # Max optimization for lowest latency
         self.sample_rate = 16000
         self.num_channels = 1
@@ -42,10 +39,6 @@ class ElevenLabsTTS(TTSInterface):
 
     def speak(self, text: str) -> None:
         """Convert `text` into speech and persist the PCM stream as a WAV file."""
-        if not self.client:
-            print("[TTS] No client available.")
-            return
-
         print("[TTS] Generating speech...")
 
         response = self._request_audio(text)
@@ -69,6 +62,8 @@ class ElevenLabsTTS(TTSInterface):
         except Exception as e:
             print("[TTS] Error writing audio:", e)
             self._last_duration = 0.0
+        finally:
+            response.close()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -85,51 +80,52 @@ class ElevenLabsTTS(TTSInterface):
             pass
         return 0.0
 
-    def _iterate_audio_chunks(self, payload: Iterable[Union[bytes, dict]]) -> Iterator[bytes]:
-        """Normalize ElevenLabs streaming payloads into raw byte chunks."""
-        for chunk in payload:
-            if isinstance(chunk, bytes):
+    def _iterate_audio_chunks(self, response: requests.Response) -> Iterator[bytes]:
+        """Stream PCM chunks from the ElevenLabs HTTP response."""
+        for chunk in response.iter_content(chunk_size=4096):
+            if chunk:
                 yield chunk
-                continue
 
-            if isinstance(chunk, dict):
-                audio_bytes = chunk.get("audio")
-                if isinstance(audio_bytes, bytes):
-                    yield audio_bytes
-                continue
-
-            # Some client builds yield objects with a .audio attribute
-            audio_attr = getattr(chunk, "audio", None)
-            if isinstance(audio_attr, bytes):
-                yield audio_attr
-
-    def _request_audio(self, text: str) -> Optional[Iterable[Union[bytes, dict]]]:
+    def _request_audio(self, text: str) -> Optional[requests.Response]:
         """Fetch streaming audio frames, retrying on transient API failures."""
-        client = self.client
-        if client is None:
-            return None
-
-        attempts: Tuple[float, float] = (0.0, 0.3)  # Faster retries
+        attempts = (0.0, 0.3)
         last_error: Optional[Exception] = None
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream"
+        payload = {
+            "text": text,
+            "model_id": self.model_id,
+            "optimize_streaming_latency": self.optimize_streaming_latency,
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+                "speed": 0.8,
+            },
+        }
+        headers = {
+            "xi-api-key": self._api_key,
+            "Accept": "audio/pcm",
+        }
+        params = {
+            "output_format": f"pcm_{self.sample_rate}",
+        }
 
         for delay in attempts:
             if delay:
                 time.sleep(delay)
 
             try:
-                return client.text_to_speech.convert(
-                    voice_id=self.voice_id,
-                    model_id=self.model_id,
-                    text=text,
-                    output_format=self.output_format,
-                    optimize_streaming_latency=self.optimize_streaming_latency,
-                    voice_settings={
-                        "stability": 0.5,
-                        "similarity_boost": 0.75,
-                        "speed": 0.8,
-                    },  # type: ignore[arg-type]
+                response = self._session.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    params=params,
+                    stream=True,
+                    timeout=30,
                 )
-            except Exception as exc:
+                response.raise_for_status()
+                return response
+            except requests.RequestException as exc:
                 last_error = exc
                 print(f"[TTS] ElevenLabs request failed (retrying): {exc}")
 

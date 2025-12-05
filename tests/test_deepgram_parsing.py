@@ -1,8 +1,21 @@
 import unittest
+import json
 from typing import Any, Dict, cast
 
 from stt.deepgram_stt import _extract_transcript
 from stt.deepgram_live import _to_dict_safe
+
+
+class MockSdkObject:
+    """Simulates a Deepgram SDK object with to_dict/to_json methods."""
+    def __init__(self, data: Dict[str, Any]):
+        self._data = data
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self._data
+
+    def to_json(self) -> str:
+        return json.dumps(self._data)
 
 
 class TestDeepgramParsing(unittest.TestCase):
@@ -24,11 +37,8 @@ class TestDeepgramParsing(unittest.TestCase):
         self.assertEqual(_extract_transcript(response), "hello world")
 
     def test_extract_transcript_from_sdk_object(self) -> None:
-        from deepgram.clients.prerecorded.v1.response import PrerecordedResponse
-
-        from_dict = cast(Any, PrerecordedResponse).from_dict
-
-        response_obj = from_dict(
+        # Simulate the SDK object structure
+        response_obj = MockSdkObject(
             {
                 "metadata": {},
                 "results": {
@@ -48,11 +58,8 @@ class TestDeepgramParsing(unittest.TestCase):
         self.assertEqual(_extract_transcript(response_obj), "baymax online")
 
     def test_to_dict_safe_live_response(self) -> None:
-        from deepgram.clients.live.v1.response import LiveResultResponse
-
-        from_dict = cast(Any, LiveResultResponse).from_dict
-
-        result_obj = from_dict(
+        # Simulate the LiveResultResponse object
+        result_obj = MockSdkObject(
             {
                 "channel": {
                     "alternatives": [

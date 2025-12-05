@@ -14,6 +14,7 @@ class Settings:
         self.DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         self.ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+        self.ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "J74irub9nJ8NIWEDskLz")
 
         # Optional: add future settings here
         self.SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", 16000))

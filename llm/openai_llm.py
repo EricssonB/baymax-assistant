@@ -11,12 +11,7 @@ class OpenAILLM(LLMInterface):
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is missing in .env")
 
-        try:
-            from openai import OpenAI
-            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        except Exception as e:
-            print("[OpenAI LLM] Warning: SDK import error:", e)
-            self.client = None
+        self.client = None  # Lazy loaded on first use
 
         self.model = "gpt-4o-mini"  # Faster model for lower latency
 
@@ -73,6 +68,20 @@ class OpenAILLM(LLMInterface):
     # ------------------------------------------------------
     # NEW MAIN METHOD (your architecture uses this)
     # ------------------------------------------------------
+    def _ensure_client(self):
+        if self.client:
+            return
+        try:
+            from openai import OpenAI
+            if not settings.OPENAI_API_KEY:
+                raise ValueError("OPENAI_API_KEY is missing")
+            self.client = OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=30.0,  # 30 second timeout for API calls
+            )
+        except Exception as e:
+            print("[OpenAI LLM] Warning: SDK import error:", e)
+
     def generate(self, text: str) -> str:
         """Generate a simple chat completion from user text."""
         print("[OpenAI LLM] generate() called...")
@@ -96,6 +105,7 @@ class OpenAILLM(LLMInterface):
             self._append_history("assistant", custom)
             return custom
 
+        self._ensure_client()
         if not self.client:
             reply = "I'm here, but my LLM brain is offline."
             self._append_history("assistant", reply)
